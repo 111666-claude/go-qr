@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `FrameTracker` aggregates the symbols decoded from an ordered sequence
+  of images, such as the frames of a camera scanning a printed poster,
+  into tracks that follow one physical symbol by its content and corner
+  position. A frame that glare or blur makes unreadable does not end a
+  track: a symbol seen again within a finite, configurable window
+  (`WithTrackGap`, default five frames) continues the same track, and a
+  longer absence ends it. Each track reports the first and last frame,
+  the number of frames that read the symbol and its best decode, the one
+  that needed the least error correction. Several symbols in a frame are
+  tracked separately and identical symbols at different positions never
+  merge; output order is the order each symbol first appeared and stays
+  stable as they move. Empty frames age the tracks, a frame of another
+  size resets them, and `WithMaxTracks` (default 256) bounds their memory.
+  `AddFrame` decodes each frame with `DecodeAll`; `AddResults` takes
+  symbols decoded by a caller's own loop, such as one bounded by
+  `DecodeAllContext`. The decoding guide has a section on aggregating a
+  burst of frames.
+
 ### Performance
 
 - The levels of the image pyramid that `Decode` and `DecodeAll` search

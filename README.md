@@ -40,6 +40,10 @@
   `DecodeAll` every code in a photo. It reads about as many real photos as
   zxing-cpp and more than WeChat, ZBar and gozxing
   ([comparison](docs/explanation/performance.md#reading-photos)).
+- **Track a code across a camera burst.** `FrameTracker` joins the decodes
+  of the same symbol across ordered frames, through the frames that glare
+  or blur made unreadable, reporting its first and last frame, how often it
+  was read and its best decode.
 - **Fast and dependency-free.** Only the standard library. Encoding is 8 to
   21× faster than [skip2/go-qrcode] and decoding 3 to 6× faster than
   [gozxing], with orders of magnitude fewer allocations

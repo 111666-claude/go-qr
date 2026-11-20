@@ -45,7 +45,9 @@
 // DecodeAll reads every symbol in an image, in reading order, and
 // JoinStructuredAppend joins the symbols of a structured append sequence.
 // DecodeContext and DecodeAllContext stop when a context is done, which
-// bounds the time an image may take.
+// bounds the time an image may take. A FrameTracker joins the decodes of
+// the same symbol across the ordered frames of a camera stream, across
+// the frames that glare or blur made unreadable.
 //
 // # Batches
 //

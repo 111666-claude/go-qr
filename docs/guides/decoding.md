@@ -91,6 +91,7 @@ last, and every sampled symbol is also read mirrored.
 | Lens distortion | ✅ moderate; strong wide-angle distortion of large symbols ⚠️ |
 | Curved surfaces (bottles, cans) | ⚠️ small symbols only |
 | Several symbols in one image | ✅ with `DecodeAll` *Since v2.6* |
+| The same symbol across a burst of frames, with frames lost to glare | ✅ with `FrameTracker` *Since v2.8* |
 | Micro QR, rMQR, FNC1 in second position, Hanzi mode | ❌ `ErrUnsupported` |
 
 When a located symbol does not decode, the decoder reads its modules
@@ -323,6 +324,64 @@ func around(corners [4]image.Point, bounds image.Rectangle) image.Rectangle {
 	return r.Inset(-max(r.Dx(), r.Dy()) / 2).Intersect(bounds)
 }
 ```
+
+## Aggregating a burst of frames
+
+*Since v2.8.* Scanning a printed poster, one frame can be lost to glare,
+motion blur or a finder out of the view while the frames before and after
+read the same code. A `FrameTracker` joins the decodes of the same
+physical symbol across the ordered frames into one track, so the poster
+needs one clean frame rather than every frame clean:
+
+```go
+tracker := qr.NewFrameTracker(qr.WithDecodeOptions(qr.WithoutInverted()))
+for frame := range frames {
+    if _, err := tracker.AddFrame(frame); err != nil {
+        return err
+    }
+}
+for _, tr := range tracker.Tracks() {
+    fmt.Println(tr.Best.Text, "frames", tr.FirstFrame, "to", tr.LastFrame,
+        "read in", tr.Count, "frames")
+}
+```
+
+Each `SymbolTrack` reports the first and last frame the symbol was read
+in, how many frames read it, and `Best`: the cleanest decode, the one that
+needed the least error correction, preferring a hard-decision read and
+then the largest appearance. A symbol is associated across frames by its
+text and its corners: the content must be identical and the centers must
+stay within one and a half symbol widths of where it was last seen.
+Several symbols in one frame are tracked separately, and identical
+symbols at different places never become one track.
+
+A symbol that fails to read for a few frames keeps its track while it
+might be glare: `WithTrackGap(n)` sets how many consecutive missing
+frames it tolerates (the default is 5); a longer absence ends the track,
+and reading it again starts a new one. Empty frames still count as
+frames, and so age the tracks. A frame whose size differs from the
+previous one resets the tracks, since positions from frames of another
+size cannot be compared. `WithMaxTracks(n)` (default 256) bounds the
+tracks, and with them the memory, on a long stream: when a frame holds a
+new symbol past the limit, the track unseen for longest is retired.
+
+`AddFrame` decodes each frame itself with `DecodeAll`. To keep your own
+decoding loop — for example one that searches a sub-image first, or
+bounds each frame with `DecodeAllContext` — decode yourself and hand the
+symbols to `AddResults`, with `nil` for a frame that read nothing:
+
+```go
+results, err := qr.DecodeAllContext(ctx, frame)
+if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+    return err
+}
+tracks, err := tracker.AddResults(results, frame.Bounds().Size())
+```
+
+`Tracks` returns its tracks in the order each symbol first appeared, and
+that order stays fixed as the symbols move. A tracker follows one stream;
+run several trackers on several goroutines, as the decoder itself is safe
+for concurrent use.
 
 ## Errors
 

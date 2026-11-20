@@ -340,3 +340,48 @@ func ExampleWithoutInverted() {
 	fmt.Println(res.Text)
 	// Output: a frame of video
 }
+
+// A FrameTracker joins the decodes of the same symbol across an ordered
+// sequence of frames, across the frames that glare or motion blur made
+// unreadable.
+func ExampleFrameTracker() {
+	code, _ := qr.Encode("https://example.com/poster")
+	frame, _ := code.Image(qr.WithScale(4))
+	blank := image.NewRGBA(frame.Bounds())
+	draw.Draw(blank, blank.Bounds(), image.White, image.Point{}, draw.Src)
+
+	tracker := qr.NewFrameTracker(qr.WithDecodeOptions(qr.WithoutInverted()))
+	for _, f := range []image.Image{frame, blank, frame, frame} {
+		if _, err := tracker.AddFrame(f); err != nil {
+			panic(err)
+		}
+	}
+	for _, tr := range tracker.Tracks() {
+		fmt.Printf("%s: frames %d..%d, read in %d of %d frames\n",
+			tr.Best.Text, tr.FirstFrame, tr.LastFrame, tr.Count, tracker.Frame())
+	}
+	// Output:
+	// https://example.com/poster: frames 0..3, read in 3 of 4 frames
+}
+
+// AddResults feeds symbols decoded in a loop of your own, such as one
+// bounded by a context per frame, into the same aggregation.
+func ExampleFrameTracker_AddResults() {
+	code, _ := qr.Encode("decoded elsewhere")
+	img, _ := code.Image(qr.WithScale(3))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	results, err := qr.DecodeAllContext(ctx, img)
+	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		panic(err)
+	}
+
+	tracker := qr.NewFrameTracker()
+	tracks, err := tracker.AddResults(results, img.Bounds().Size())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(tracks[0].Text, tracks[0].FirstFrame, tracks[0].Count)
+	// Output: decoded elsewhere 0 1
+}
